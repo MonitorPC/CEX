@@ -1,6 +1,3 @@
-You can access the CEX by this link http://158.160.91.57:5173
-The API is http://158.160.91.57:8000
-
 # Minimal CEX (No DB, No Stress Test)
 
 ## 1.
@@ -194,7 +191,15 @@ Set the API URL to `http://127.0.0.1:8000` (or your backend host/port) in the in
 
 ---
 
-## 5. Typical Demo Flow
+## 5. Deployed CEX (Web and API)
+
+You can access the CEX by this link `http://158.160.91.57:5173`
+
+* The API is `http://158.160.91.57:8000`
+
+---
+
+## 6. Typical Demo Flow
 
 ### Step 1 – Create admin and normal users
 
@@ -255,7 +260,7 @@ Set the API URL to `http://127.0.0.1:8000` (or your backend host/port) in the in
 
 ---
 
-## 6. API Overview
+## 7. API Overview
 
 **Auth**
 
