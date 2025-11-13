@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      context: ./backend
+    container_name: cex-api
+    ports:
+      - "8000:8000"
+    environment:
+      # change this in real use
+      APP_SECRET: "dev-secret-change-me"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+    container_name: cex-web
+    ports:
+      - "5173:80"   # browser: http://localhost:5173
+    depends_on:
+      - api
+    restart: unless-stopped
