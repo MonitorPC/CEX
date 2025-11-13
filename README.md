@@ -193,9 +193,9 @@ Set the API URL to `http://127.0.0.1:8000` (or your backend host/port) in the in
 
 ## 5. Deployed CEX (Web and API)
 
-You can access the CEX by this link `http://158.160.91.57:5173`
+You can access the CEX by this link http://158.160.91.57:5173
 
-* The API is `http://158.160.91.57:8000`
+* The API is http://158.160.91.57:8000
 
 ---
 
