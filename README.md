@@ -1,3 +1,5 @@
+You can access the CEX by this link http://158.160.91.57:5173
+
 # Minimal CEX (No DB, No Stress Test)
 
 ## 1.
