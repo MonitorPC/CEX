@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CEX - Login / Register</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="common.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    .card { max-width: 480px; border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+    input, button { padding: 8px; border-radius: 8px; border: 1px solid #ccc; }
+    button { cursor: pointer; }
+    .ok { color: green; }
+    .err { color: #b00; }
+  </style>
+</head>
+<body>
+  <h1>Centralized Exchange (Minimal) – Auth</h1>
+
+  <div class="row">
+    <label>API:</label>
+    <input id="api" style="width:260px" />
+    <button onclick="saveApiBtn()">Save</button>
+    <span id="health"></span>
+  </div>
+
+  <div class="card">
+    <h2>Register</h2>
+    <p>Registration requires only <b>user_id</b> and <b>password</b>. Email will be added during KYC.</p>
+    <div class="row">
+      <input id="reg_user" placeholder="user_id (e.g. admin, alice)" />
+      <input id="reg_pw" type="password" placeholder="password" />
+    </div>
+    <button onclick="register()">Register</button>
+  </div>
+
+  <br/>
+
+  <div class="card">
+    <h2>Login</h2>
+    <div class="row">
+      <input id="login_user" placeholder="user_id" />
+      <input id="login_pw" type="password" placeholder="password" />
+    </div>
+    <button onclick="login()">Login</button>
+    <p id="login_info"></p>
+  </div>
+
+  <p id="msg"></p>
+
+  <script>
+    document.getElementById("api").value = getApi();
+    pingHealth("health");
+
+    function saveApiBtn() {
+      setApi(document.getElementById("api").value);
+      pingHealth("health");
+    }
+
+    function setMsg(t, err=false) {
+      const el = document.getElementById("msg");
+      el.textContent = t;
+      el.className = err ? "err" : "ok";
+      setTimeout(()=>{ el.textContent=""; }, 4000);
+    }
+
+    async function register() {
+      const user = document.getElementById("reg_user").value.trim();
+      const pw = document.getElementById("reg_pw").value;
+      if (!user || !pw) { setMsg("user_id and password required", true); return; }
+      const r = await fetch(getApi()+"/auth/register", {
+        method: "POST",
+        headers: {"content-type":"application/json"},
+        body: JSON.stringify({user_id: user, password: pw}),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(()=>({}));
+        setMsg("Register failed: "+(j.detail||r.statusText), true);
+      } else {
+        const j = await r.json();
+        setMsg("Registered "+user + (j.is_admin ? " (admin)" : ""));
+      }
+    }
+
+    async function login() {
+      const user = document.getElementById("login_user").value.trim();
+      const pw = document.getElementById("login_pw").value;
+      if (!user || !pw) { setMsg("user_id and password required", true); return; }
+
+      const r = await fetch(getApi()+"/auth/login", {
+        method: "POST",
+        headers: {"content-type":"application/json"},
+        body: JSON.stringify({user_id: user, password: pw}),
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) {
+        setMsg("Login failed: "+(j.detail||r.statusText), true);
+        return;
+      }
+      saveSession(j.access_token, j.user_id, j.is_admin, j.kyc_status, j.email);
+      const info = `Logged in as ${j.user_id} | KYC: ${j.kyc_status} | Admin: ${j.is_admin}`;
+      document.getElementById("login_info").textContent = info;
+      setMsg("Login ok");
+
+      // show navigation links
+      document.getElementById("login_info").innerHTML =
+        info +
+        `<br/><a href="kyc.html">Go to KYC page</a> | ` +
+        `<a href="trade.html">Go to Trade page</a>` +
+        (j.is_admin ? ` | <a href="admin.html">Admin KYC page</a>` : "");
+    }
+  </script>
+</body>
+</html>

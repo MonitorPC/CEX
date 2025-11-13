@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CEX - Trade</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="common.js"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:20px;}
+    .row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+    .card{border:1px solid #ddd;border-radius:12px;padding:16px;}
+    input,select,button{padding:8px;border-radius:8px;border:1px solid #ccc;}
+    button{cursor:pointer;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{border-bottom:1px solid #eee;padding:6px;font-size:14px;}
+    .ok{color:green}.err{color:#b00}
+  </style>
+</head>
+<body>
+  <h1>Trading</h1>
+  <div class="row">
+    <label>API:</label><input id="api" style="width:260px"/>
+    <button onclick="saveApiBtn()">Save</button>
+    <span id="health"></span>
+  </div>
+  <p>
+    <a href="index.html">← Auth</a> | 
+    <a href="kyc.html">KYC</a> |
+    <a href="admin.html">Admin</a>
+  </p>
+
+  <p id="who"></p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Balances</h2>
+      <div class="row">
+        <button onclick="refreshBalances()">Refresh</button>
+      </div>
+      <div class="row">
+        <!-- <input id="asset" value="USDT" style="width:80px"/> -->
+        <select id="asset">
+          <option value="USDT">USDT</option>
+          <option value="BTC">BTC</option>
+        </select>
+        <input id="amt" type="number" step="0.00000001" placeholder="amount"/>
+        <button onclick="deposit()">Deposit</button>
+        <button onclick="withdraw()">Withdraw</button>
+      </div>
+      <pre id="balances"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Order Entry</h2>
+      <div class="row">
+        <select id="side">
+          <option>buy</option>
+          <option>sell</option>
+        </select>
+        <select id="otype">
+          <option>limit</option>
+          <option>market</option>
+        </select>
+        <input id="qty" type="number" step="0.00000001" placeholder="qty"/>
+        <input id="price" type="number" step="0.01" placeholder="price (limit only)"/>
+        <button onclick="placeOrder()">Place</button>
+      </div>
+      <div class="row">
+        <button onclick="loadOpen()">Load Open Orders</button>
+      </div>
+      <table id="openTbl">
+        <thead><tr><th>id</th><th>side</th><th>type</th><th>price</th><th>remaining</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Order Book</h2>
+      <div class="row">
+        <button onclick="loadBook()">Refresh Book</button>
+      </div>
+      <div class="grid">
+        <div>
+          <h3>Bids</h3>
+          <table id="bids"><thead><tr><th>Price</th><th>Qty</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div>
+          <h3>Asks</h3>
+          <table id="asks"><thead><tr><th>Price</th><th>Qty</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <h3>Recent Trades</h3>
+      <button onclick="loadTrades()">Refresh Trades</button>
+      <table id="trades"><thead><tr><th>Price</th><th>Qty</th><th>Taker Side</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <p id="msg"></p>
+
+  <script>
+    document.getElementById("api").value = getApi();
+    pingHealth("health");
+    const sess = getSession();
+    if (!sess.token) {
+      alert("You must login first");
+      window.location = "index.html";
+    }
+    document.getElementById("who").textContent =
+      "Logged in as: "+sess.user+" | KYC: "+sess.kyc_status+" | Admin: "+sess.is_admin;
+
+    function saveApiBtn() {
+      setApi(document.getElementById("api").value);
+      pingHealth("health");
+    }
+    function setMsg(t, err=false){
+      const el = document.getElementById("msg");
+      el.textContent = t;
+      el.className = err?"err":"ok";
+      setTimeout(()=>{el.textContent="";},4000);
+    }
+
+    async function refreshBalances(){
+      const s = getSession();
+      const r = await fetch(getApi()+"/wallet/balances/"+encodeURIComponent(s.user), {
+        headers: {...authHeaders()}
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) { setMsg("Balances failed: "+(j.detail||r.statusText), true); return; }
+      document.getElementById("balances").textContent = JSON.stringify(j, null, 2);
+    }
+
+    async function deposit(){
+      const s = getSession();
+      const asset = document.getElementById("asset").value.trim();
+      const amt = document.getElementById("amt").value;
+      const r = await fetch(getApi()+"/wallet/deposit", {
+        method:"POST",
+        headers: {"content-type":"application/json", ...authHeaders()},
+        body: JSON.stringify({user_id: s.user, asset, amount: amt}),
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) { setMsg("Deposit failed: "+(j.detail||r.statusText), true); return; }
+      setMsg("Deposit ok");
+      refreshBalances();
+    }
+
+    async function withdraw(){
+      const s = getSession();
+      const asset = document.getElementById("asset").value.trim();
+      const amt = document.getElementById("amt").value;
+      const r = await fetch(getApi()+"/wallet/withdraw", {
+        method:"POST",
+        headers: {"content-type":"application/json", ...authHeaders()},
+        body: JSON.stringify({user_id: s.user, asset, amount: amt}),
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) { setMsg("Withdraw failed: "+(j.detail||r.statusText), true); return; }
+      setMsg("Withdrawn "+j.withdrawn+" (fee "+j.fee+")");
+      refreshBalances();
+    }
+
+    async function placeOrder(){
+      const s = getSession();
+      const side = document.getElementById("side").value;
+      const otype = document.getElementById("otype").value;
+      const qty = document.getElementById("qty").value;
+      const price = document.getElementById("price").value || null;
+      const body = {user_id: s.user, symbol:"BTC-USDT", side, type: otype, qty};
+      if (otype === "limit") body.price = price;
+      const r = await fetch(getApi()+"/orders", {
+        method:"POST",
+        headers: {"content-type":"application/json", ...authHeaders()},
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) { setMsg("Order failed: "+(j.detail||r.statusText), true); return; }
+      setMsg("Order "+j.order_id+" "+j.status);
+      loadOpen(); loadBook(); loadTrades(); refreshBalances();
+    }
+
+    async function loadOpen(){
+      const s = getSession();
+      const r = await fetch(getApi()+"/orders/open/"+encodeURIComponent(s.user), {
+        headers: {...authHeaders()}
+      });
+      const j = await r.json().catch(()=>([]));
+      const tb = document.querySelector("#openTbl tbody"); tb.innerHTML="";
+      j.forEach(o => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${o.id}</td><td>${o.side}</td><td>${o.type}</td><td>${o.price||""}</td><td>${o.remaining}</td><td><button data-id="${o.id}">cancel</button></td>`;
+        tr.querySelector("button").onclick = async (ev)=>{
+          const id = ev.target.getAttribute("data-id");
+          const r2 = await fetch(getApi()+"/orders/"+id+"/cancel", {
+            method:"POST",
+            headers: {...authHeaders()}
+          });
+          setMsg(r2.ok?"Canceled":"Cancel failed", !r2.ok);
+          loadOpen(); loadBook(); refreshBalances();
+        };
+        tb.appendChild(tr);
+      });
+    }
+
+    function fillTable(id, rows){
+      const tb = document.querySelector(id+" tbody"); tb.innerHTML="";
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${r[0]}</td><td>${r[1]}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    async function loadBook(){
+      const r = await fetch(getApi()+"/orderbook/BTC-USDT");
+      const j = await r.json().catch(()=>({bids:[],asks:[]}));
+      fillTable("#bids", j.bids || []);
+      fillTable("#asks", j.asks || []);
+    }
+    async function loadTrades(){
+      const r = await fetch(getApi()+"/trades/BTC-USDT");
+      const j = await r.json().catch(()=>([]));
+      const tb = document.querySelector("#trades tbody"); tb.innerHTML="";
+      j.forEach(t => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${t.price}</td><td>${t.qty}</td><td>${t.taker_side}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    // initial
+    refreshBalances(); loadOpen(); loadBook(); loadTrades();
+  </script>
+</body>
+</html>
+

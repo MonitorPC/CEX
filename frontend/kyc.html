@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CEX - KYC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="common.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    .card { max-width: 480px; border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+    input, button { padding:8px; border-radius:8px; border:1px solid #ccc; }
+    button { cursor:pointer; }
+    .ok{color:green}.err{color:#b00}
+  </style>
+</head>
+<body>
+  <h1>KYC Submission</h1>
+  <div class="row">
+    <label>API:</label>
+    <input id="api" style="width:260px" />
+    <button onclick="saveApiBtn()">Save</button>
+    <span id="health"></span>
+  </div>
+
+  <p><a href="index.html">← Back to Login</a> | <a href="trade.html">Trade</a></p>
+
+  <div class="card">
+    <h2>User KYC</h2>
+    <p id="who"></p>
+    <div class="row">
+      <input id="full_name" placeholder="Full name" />
+      <input id="email" placeholder="Email (required)" />
+      <input id="country" placeholder="Country" />
+      <input id="doc" placeholder="Document ID / number" />
+    </div>
+    <button onclick="submitKyc()">Submit KYC</button>
+    <p id="status"></p>
+  </div>
+
+  <p id="msg"></p>
+
+  <script>
+    document.getElementById("api").value = getApi();
+    pingHealth("health");
+    const sess = getSession();
+    if (!sess.token) {
+      alert("You must login first"); 
+      window.location = "index.html";
+    }
+    document.getElementById("who").textContent = "Logged in as: "+sess.user;
+
+    function saveApiBtn() {
+      setApi(document.getElementById("api").value);
+      pingHealth("health");
+    }
+
+    function setMsg(t, err=false) {
+      const el = document.getElementById("msg");
+      el.textContent = t;
+      el.className = err?"err":"ok";
+      setTimeout(()=>{el.textContent="";},4000);
+    }
+
+    async function submitKyc() {
+      const s = getSession();
+      const body = {
+        user_id: s.user,
+        full_name: document.getElementById("full_name").value,
+        email: document.getElementById("email").value,
+        country: document.getElementById("country").value,
+        document_id: document.getElementById("doc").value,
+      };
+      if (!body.email) { setMsg("Email required for KYC", true); return; }
+
+      const r = await fetch(getApi()+"/kyc/submit", {
+        method:"POST",
+        headers: {"content-type":"application/json", ...authHeaders()},
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) {
+        setMsg("KYC submit failed: "+(j.detail||r.statusText), true);
+        return;
+      }
+      setMsg("KYC submitted: "+j.status);
+      document.getElementById("status").textContent = "Status: "+j.status+" | Email: "+j.email;
+      saveSession(s.token, s.user, s.is_admin, j.status, j.email);
+    }
+  </script>
+</body>
+</html>
+

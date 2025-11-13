@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CEX - Admin KYC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="common.js"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:20px;}
+    .row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+    .card{border:1px solid #ddd;border-radius:12px;padding:16px;max-width:600px;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{border-bottom:1px solid #eee;padding:6px;font-size:14px;}
+    button{padding:6px 10px;border-radius:6px;border:1px solid #ccc;cursor:pointer;}
+    .ok{color:green}.err{color:#b00}
+  </style>
+</head>
+<body>
+  <h1>Admin – KYC Verification</h1>
+  <div class="row">
+    <label>API:</label><input id="api" style="width:260px"/>
+    <button onclick="saveApiBtn()">Save</button>
+    <span id="health"></span>
+  </div>
+  <p>
+    <a href="index.html">← Auth</a> |
+    <a href="kyc.html">User KYC</a> |
+    <a href="trade.html">Trade</a>
+  </p>
+  <p id="who"></p>
+
+  <div class="card">
+    <h2>Pending / Submitted KYC</h2>
+    <button onclick="loadPending()">Refresh list</button>
+    <table id="kycTbl">
+      <thead><tr><th>user_id</th><th>email</th><th>status</th><th>actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p id="msg"></p>
+
+  <script>
+    document.getElementById("api").value = getApi();
+    pingHealth("health");
+    const sess = getSession();
+    if (!sess.token) {
+      alert("You must login as admin first");
+      window.location = "index.html";
+    }
+    if (!sess.is_admin) {
+      alert("This page is admin-only");
+      window.location = "index.html";
+    }
+    document.getElementById("who").textContent =
+      "Logged in as: "+sess.user+" (admin)";
+
+    function saveApiBtn() {
+      setApi(document.getElementById("api").value);
+      pingHealth("health");
+    }
+    function setMsg(t, err=false) {
+      const el = document.getElementById("msg");
+      el.textContent = t;
+      el.className = err?"err":"ok";
+      setTimeout(()=>{el.textContent="";},4000);
+    }
+
+    async function loadPending(){
+      const r = await fetch(getApi()+"/kyc/pending", {
+        headers: {...authHeaders()}
+      });
+      const j = await r.json().catch(()=>([]));
+      if (!r.ok) {
+        setMsg("Load failed: "+(j.detail||r.statusText), true); return;
+      }
+      const tb = document.querySelector("#kycTbl tbody"); tb.innerHTML="";
+      j.forEach(u => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${u.user_id}</td><td>${u.email||""}</td><td>${u.kyc_status}</td><td></td>`;
+        const td = tr.querySelector("td:last-child");
+        const btnOk = document.createElement("button");
+        btnOk.textContent = "Verify";
+        btnOk.onclick = ()=> verifyUser(u.user_id, "verified");
+        const btnRej = document.createElement("button");
+        btnRej.textContent = "Reject";
+        btnRej.onclick = ()=> verifyUser(u.user_id, "rejected");
+        td.appendChild(btnOk);
+        td.appendChild(btnRej);
+        tb.appendChild(tr);
+      });
+    }
+
+    async function verifyUser(uid, status){
+      const r = await fetch(getApi()+"/kyc/admin/verify?target_user_id="+encodeURIComponent(uid)+"&status="+encodeURIComponent(status), {
+        method:"POST",
+        headers: {...authHeaders()}
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok) {
+        setMsg("Change failed: "+(j.detail||r.statusText), true); return;
+      }
+      setMsg("Set "+uid+" -> "+status);
+      loadPending();
+    }
+
+    loadPending();
+  </script>
+</body>
+</html>
+
